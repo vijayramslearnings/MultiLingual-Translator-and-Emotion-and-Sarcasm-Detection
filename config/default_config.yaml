@@ -1,0 +1,67 @@
+# Multilingual Voice Translation & Emotion/Sarcasm XAI System Configuration
+
+device: "auto"  # "cuda", "mps", or "cpu"
+
+pipeline:
+
+  enable_transliteration: true
+  fallback_mode: "smart" # Allows lightweight operational fallback if full models (e.g. 5GB IndicTrans2) are offline
+
+asr:
+  backend: "whisper"  # "whisper", "indic_whisper", "mock"
+  model_name: "openai/whisper-tiny"  # lightweight default for fast inference, editable to "openai/whisper-large-v3"
+  language: null  # Auto-detect language if null
+  sample_rate: 16000
+
+lid:
+  backend: "fasttext_xlmr"  # "fasttext_xlmr", "indic_lid", "heuristic"
+  model_name: "papluca/xlm-roberta-base-language-detection"
+  supported_languages: ["hi", "ta", "te", "kn", "ml", "bn", "mr", "gu", "pa", "ur", "en"]
+  code_mix_pairs: ["hi-en", "ta-en", "te-en", "bn-en"]
+
+transliteration:
+  backend: "indic_transliteration" # "indic_transliteration", "indic_xlit"
+  source_script: "Iast"  # or Romanized/ITRANS
+  target_script: "Devanagari"
+
+mt:
+  backend: "nllb"  # "indic_trans2", "nllb", "marian"
+  model_name: "facebook/nllb-200-distilled-600M"
+  default_target_lang: "en"
+  language_code_map:
+    hi: "hin_Deva"
+    ta: "tam_Taml"
+    te: "tel_Telu"
+    kn: "kan_Knda"
+    ml: "mal_Mlym"
+    bn: "ben_Beng"
+    mr: "mar_Deva"
+    gu: "guj_Gujr"
+    pa: "pan_Guru"
+    ur: "urd_Arab"
+    en: "eng_Latn"
+
+emotion_text:
+  model_name: "j-hartmann/emotion-english-distilroberta-base"
+  labels: ["anger", "disgust", "fear", "joy", "sadness", "surprise", "neutral"]
+
+emotion_acoustic:
+  model_name: "superb/wav2vec2-base-superb-er"
+  labels: ["neutral", "happy", "sad", "angry"]
+  frame_length_ms: 25
+
+fusion:
+  strategy: "weighted_average"  # "weighted_average", "trained_head"
+  text_weight: 0.55
+  acoustic_weight: 0.45
+
+sarcasm:
+  incongruity_threshold: 0.40
+  weights:
+    sentiment_mismatch: 0.70
+    acoustic_pitch_spike: 0.30
+
+xai:
+  captum_method: "integrated_gradients"  # "integrated_gradients", "shap"
+  top_k_tokens: 5
+  acoustic_window_sec: 0.2

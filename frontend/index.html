@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bhasha Live — Real-Time Indian Voice Translation & Tone Detection</title>
+  <meta name="description" content="Speak naturally in Hinglish, Tanglish, or regional Indian languages. Get instant voice translation and tone detection.">
+  
+  <!-- Modern Typography -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <!-- Ambient Background Glow -->
+  <div class="bg-ambient-orb orb-1"></div>
+  <div class="bg-ambient-orb orb-2"></div>
+
+  <div class="app-container">
+
+    <!-- HEADER / NAVIGATION -->
+    <header class="header-glass">
+      <div class="brand-wrapper">
+        <div class="brand-icon">भा</div>
+        <div class="brand-title">
+          Bhasha Live
+          <span class="badge-live">Live</span>
+        </div>
+      </div>
+
+      <!-- Language Selector -->
+      <div class="lang-selector-group">
+        <span class="lang-selector-label">I Speak</span>
+        <select id="srcLang" class="custom-select">
+          <option value="hi-en">Hinglish (Hindi + English)</option>
+          <option value="ta-en">Tanglish (Tamil + English)</option>
+          <option value="te-en">Telglish (Telugu + English)</option>
+          <option value="hi">Hindi (हिन्दी)</option>
+          <option value="ta">Tamil (தமிழ்)</option>
+          <option value="te">Telugu (తెలుగు)</option>
+          <option value="en">English</option>
+        </select>
+
+        <button id="swapLangBtn" class="swap-btn" title="Swap Languages">⇄</button>
+
+        <span class="lang-selector-label">Translate To</span>
+        <select id="tgtLang" class="custom-select">
+          <option value="en" selected>English</option>
+          <option value="hi">Hindi (हिन्दी)</option>
+          <option value="ta">Tamil (தமிழ்)</option>
+          <option value="te">Telugu (తెలుగు)</option>
+        </select>
+      </div>
+
+      <!-- Quick Mic Trigger -->
+      <div class="header-actions">
+        <button id="btnListenTrigger" class="btn-pill-listen">
+          <span>🎙️ Start Speaking</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- HERO & INTERACTIVE 3D VOICE GLOBE -->
+    <section class="hero-section">
+      <div class="hero-content">
+        <h1 class="hero-title">
+          Speak Naturally. <br>
+          <span class="text-gradient">Translate Instantly.</span>
+        </h1>
+        <p class="hero-subtitle">
+          Real-time voice interpretation for code-mixed Indian speech. Understands Hinglish, Tanglish, and regional dialects while detecting tone and sarcasm.
+        </p>
+
+        <!-- Quick Demo Presets & File Upload -->
+        <div class="demo-chips-group">
+          <span class="chips-label">Try an example:</span>
+          <button class="btn-preset active" data-preset="hinglish_sarcastic">Hinglish (Sarcasm)</button>
+          <button class="btn-preset" data-preset="tanglish_praise">Tanglish (Friendly)</button>
+          <button class="btn-preset" data-preset="telglish_neutral">Telglish (Neutral)</button>
+          <label class="btn-upload" title="Upload an audio recording">
+            📁 Upload Audio
+            <input type="file" id="audioFileInput" accept="audio/*" style="display: none;">
+          </label>
+        </div>
+
+        <!-- Custom Typed Input Box -->
+        <div class="custom-text-input-row">
+          <input type="text" id="customTextInput" class="text-input-field" placeholder="Or type your own Hinglish, Tanglish, or regional sentence...">
+          <button id="btnTranslateText" class="btn-text-submit">Translate</button>
+        </div>
+      </div>
+
+      <!-- 3D Voice Sphere -->
+      <div class="hero-canvas-card">
+        <canvas id="particleOrbitCanvas"></canvas>
+        <div class="canvas-overlay-tag">
+          <span>Voice Activity Monitor</span>
+          <span id="canvasStatusText">Listening for Speech</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- LIVE TRANSLATION WORKSPACE -->
+    <section class="workspace-grid">
+
+      <!-- Left Panel: Original Speech -->
+      <div class="glass-panel">
+        <div class="panel-header">
+          <div class="panel-title">
+            <span>🗣️ What You Said</span>
+          </div>
+          <span class="status-pill status-listening">Speech Input</span>
+        </div>
+
+        <!-- Frequency Visualizer -->
+        <div class="visualizer-strip">
+          <canvas id="audioVisualizerCanvas"></canvas>
+        </div>
+
+        <!-- Transcript with Language Tags -->
+        <div id="transcriptDisplay" class="stream-display-box">
+          <!-- Populated by JavaScript -->
+        </div>
+      </div>
+
+      <!-- Right Panel: Live Translation -->
+      <div class="glass-panel">
+        <div class="panel-header">
+          <div class="panel-title">
+            <span>🌐 Live Translation</span>
+          </div>
+          <button id="btnSpeakTranslation" class="btn-tts" title="Listen to translation">
+            🔊 Speak
+          </button>
+        </div>
+
+        <!-- Translation Output -->
+        <div id="translationDisplay" class="stream-output-box">
+          <!-- Populated by JavaScript -->
+        </div>
+      </div>
+
+    </section>
+
+    <!-- TONE & SARCASM INSIGHT CARD -->
+    <section id="divergencePanel" class="divergence-panel">
+      <div class="divergence-header">
+        <div>
+          <h2 style="font-size: 18px; font-weight: 700; color: #fff; margin-bottom: 4px;">
+            Tone & Intent Analysis
+          </h2>
+          <p id="sarcasmReasonText" style="font-size: 14px; color: var(--text-secondary); margin-top: 4px;">
+            Analyzing emotion and tone alignment...
+          </p>
+        </div>
+        <div id="sarcasmStatusBadge" class="sarcasm-badge badge-sarcastic">
+          ⚠️ Sarcasm Detected
+        </div>
+      </div>
+
+      <!-- Intuitive Sentiment Balance Bars -->
+      <div class="gauge-wrapper">
+        <!-- Words Bar -->
+        <div class="gauge-row">
+          <div class="gauge-label">
+            <span>Words Meaning</span>
+          </div>
+          <div class="track-container">
+            <div id="trackWordsSentiment" class="track-fill-words" style="width: 88%;"></div>
+          </div>
+          <div id="wordsSentimentScore" class="gauge-score">Positive</div>
+        </div>
+
+        <!-- Vocal Tone Bar -->
+        <div class="gauge-row">
+          <div class="gauge-label">
+            <span>Vocal Tone</span>
+          </div>
+          <div class="track-container">
+            <div id="trackVoiceSentiment" class="track-fill-voice" style="width: 14%;"></div>
+          </div>
+          <div id="voiceSentimentScore" class="gauge-score">Negative</div>
+        </div>
+      </div>
+
+      <!-- Tone Indicators / Key Words -->
+      <div class="tone-indicators-row">
+        <div class="tone-col">
+          <span class="sub-label">Key Emotion Words:</span>
+          <div id="xaiTokenChips" class="clean-chips-wrapper">
+            <!-- Populated dynamically -->
+          </div>
+        </div>
+        <div class="tone-col">
+          <span class="sub-label">Voice Tone Cues:</span>
+          <ul id="xaiAcousticCues" class="clean-cues-list">
+            <!-- Populated dynamically -->
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- CLEAN FOOTER -->
+    <footer class="footer-glass">
+      <div>
+        <strong>Bhasha Live</strong> • Low-Latency Multilingual Voice Translation
+      </div>
+      <div class="footer-status">
+        <span class="status-dot"></span> System Ready
+      </div>
+    </footer>
+
+  </div>
+
+  <!-- Scripts -->
+  <script src="js/particles.js"></script>
+  <script src="js/audio.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
