@@ -191,3 +191,4 @@ streamlit run demo.py
 ## 📜 License
 Apache 2.0 License.
 # MultiLingual-Translator-and-Emotion-and-Sarcasm-Detection
+# MultiLingual-Translator-and-Emotion-and-Sarcasm-Detection
