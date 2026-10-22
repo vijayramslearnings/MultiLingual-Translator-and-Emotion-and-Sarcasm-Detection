@@ -13,7 +13,7 @@ from pipeline import MultilingualVoicePipeline
 from pipeline.utils.audio_utils import generate_synthetic_audio
 
 
-def run_cli_demo(audio_path: str = None, target_lang: str = "en"):
+def run_cli_demo(audio_path: str = None, target_lang: str = "en", source_lang: str = "hi-en"):
     """Runs pipeline demo in command line interface."""
     if not audio_path or not os.path.exists(audio_path):
         print("[Demo] Generating synthetic Hinglish speech sample...")
@@ -23,11 +23,12 @@ def run_cli_demo(audio_path: str = None, target_lang: str = "en"):
     print(f"\n========================================================")
     print(f" Multilingual Voice Translation System — Interactive Demo")
     print(f" Processing Audio: {audio_path}")
+    print(f" Source Language:  {source_lang}")
     print(f" Target Language:  {target_lang}")
     print(f"========================================================\n")
 
     pipeline = MultilingualVoicePipeline(config_path="config/default_config.yaml")
-    result = pipeline.process(audio_path, target_lang=target_lang)
+    result = pipeline.process(audio_path, target_lang=target_lang, source_lang=source_lang)
 
     print("\n--- FINAL STRUCTURED RESULT JSON ---")
     print(json.dumps(result, indent=2, ensure_ascii=False))
@@ -51,6 +52,20 @@ def run_streamlit_dashboard():
     """)
 
     st.sidebar.header("⚙️ Pipeline Configuration")
+    source_lang = st.sidebar.selectbox(
+        "I Speak (Source Language)",
+        options=["hi-en", "ta-en", "te-en", "hi", "ta", "te", "en"],
+        format_func=lambda x: {
+            "hi-en": "Hinglish (Hindi + English)",
+            "ta-en": "Tanglish (Tamil + English)",
+            "te-en": "Telglish (Telugu + English)",
+            "hi": "Hindi (हिन्दी)",
+            "ta": "Tamil (தமிழ்)",
+            "te": "Telugu (తెలుగు)",
+            "en": "English"
+        }[x]
+    )
+
     target_lang = st.sidebar.selectbox(
         "Target Language for MT",
         options=["en", "hi", "ta", "te", "kn", "ml", "bn", "mr", "gu", "pa", "ur"],
@@ -103,7 +118,12 @@ def run_streamlit_dashboard():
     if st.button("🚀 Process Voice Utterance", type="primary"):
         with st.spinner("Processing speech through deterministic 7-stage pipeline..."):
             pipeline = MultilingualVoicePipeline(config_path="config/default_config.yaml")
-            res = pipeline.process(audio_file, target_lang=target_lang, override_transcript=override_text)
+            res = pipeline.process(
+                audio_file, 
+                target_lang=target_lang, 
+                source_lang=source_lang,
+                override_transcript=override_text
+            )
 
         st.success("Utterance Processed Successfully!")
 

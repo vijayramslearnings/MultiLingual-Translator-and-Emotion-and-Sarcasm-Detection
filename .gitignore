@@ -1,0 +1,38 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+.pytest_cache/
+
+# Large Model weights & Checkpoints (>100MB not supported on standard GitHub)
+*.pt
+*.pth
+*.bin
+*.onnx
+data/models/*.pt
+data/test_eval/*.pt
+
+# Temporary user audio uploads from server/microphone
+data/uploads/*.wav
+data/uploads/user_*
+
+# SSL certificates & Keys
+*.pem
+*.key
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Antigravity agent files
+.agents/

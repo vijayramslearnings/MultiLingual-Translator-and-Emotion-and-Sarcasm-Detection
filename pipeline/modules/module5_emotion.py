@@ -5,6 +5,7 @@ Module 5 — Emotion Detection (Text, Acoustic & Late Fusion Layer)
 5c Late Fusion Layer -> Combines 5a + 5b, computes agreement flag, returns final label & confidence.
 """
 
+import re
 import numpy as np
 import torch
 import torch.nn.functional as F
@@ -13,15 +14,25 @@ from pipeline.utils.audio_utils import extract_acoustic_features
 
 
 class TextEmotionClassifier:
-    """Module 5a: Text Emotion Detection"""
+    """Module 5a: Text Emotion Detection (Hugging Face Transformers / MuRIL MTL)"""
     def __init__(self, config: Dict[str, Any]):
         self.config = config.get("emotion_text", {})
+        self.backend = self.config.get("backend", "transformers")
         self.model_name = self.config.get("model_name", "j-hartmann/emotion-english-distilroberta-base")
         self.labels = self.config.get("labels", ["anger", "disgust", "fear", "joy", "sadness", "surprise", "neutral"])
         self.classifier = None
+        self.muril_engine = None
         self._initialize_backend()
 
     def _initialize_backend(self):
+        if self.backend == "muril_mtl" or self.config.get("use_muril_mtl"):
+            try:
+                from pipeline.codemix_mtl import CodeMixedInferenceEngine
+                self.muril_engine = CodeMixedInferenceEngine()
+                return
+            except Exception as e:
+                print(f"[Text Emotion Warning] Could not initialize MuRIL MTL engine: {e}. Falling back to standard pipeline.")
+
         try:
             from transformers import pipeline
             device = 0 if torch.cuda.is_available() else -1
@@ -30,37 +41,129 @@ class TextEmotionClassifier:
             print(f"[Text Emotion Warning] Could not load text emotion model '{self.model_name}': {e}. Using deterministic text emotion classifier.")
             self.classifier = None
 
-    def predict(self, text: str) -> Dict[str, Any]:
-        """Returns softmax distribution across emotion classes and top label."""
-        words = text.split()[:200]
-        safe_text = " ".join(words) if words else "neutral"
+    # Affective Lexicon for Code-Mixed Indian Conversations (Hindi, Tamil, English)
+    CODE_MIX_EMOTIONS = {
+        "joy": [
+            "happy", "joy", "great", "excellent", "good", "awesome", "super", "wonderful", "love", "lovely",
+            "blessed", "glad", "delighted", "proud", "congrats", "congratulations", "thanks", "thank you",
+            "shukriya", "dhanyavad", "nandri", "badhiya", "bahut badhiya", "bohot achha", "kamaal", "khush",
+            "khushi", "pyaar", "mazza", "maza", "nalla", "romba nalla", "semma", "mass", "gethu", "azhaga",
+            "bagundi", "chala bagundi", "chennagide", "sundaram", "adbhut"
+        ],
+        "anger": [
+            "angry", "anger", "furious", "mad", "annoyed", "frustrated", "irritated", "hate", "worst",
+            "terrible", "horrible", "useless", "stupid", "idiot", "nonsense", "rubbish", "cheat",
+            "gussa", "bekar", "bilkul bekar", "ganda", "ghatiya", "bakwas", "kopam", "kevalam",
+            "kevalama", "sanda", "sandai", "erichal", "thappu", "waste", "cheat", "scam"
+        ],
+        "sadness": [
+            "sad", "sadness", "unhappy", "depressed", "heartbroken", "crying", "cry", "tears", "pain",
+            "lonely", "sorry", "miss you", "grief", "loss", "mourning", "regret",
+            "dukh", "dard", "rona", "udas", "udasi", "kavala", "valikidhu", "azhugai", "thunbam",
+            "badha", "kashtam", "marandhuten"
+        ],
+        "fear": [
+            "fear", "afraid", "scared", "frightened", "terrified", "panic", "worried", "worry",
+            "nervous", "anxious", "anxiety", "danger", "threat",
+            "dar", "darr", "khauf", "tension", "bayama", "bayam", "payam", "bayandhuten", "bhayam"
+        ],
+        "surprise": [
+            "surprise", "surprised", "shock", "shocked", "shocking", "amazed", "astonished", "unbelievable",
+            "unexpected", "omg", "wow", "arrey", "arre", "wah", "waah", "aaha", "aacharyam", "enna da"
+        ],
+        "disgust": [
+            "disgust", "disgusted", "disgusting", "gross", "nasty", "dirty", "yuck", "sickening",
+            "chhi", "chee", "thoo", "karumam"
+        ]
+    }
 
-        if self.classifier is not None:
+    def predict(self, text: str) -> Dict[str, Any]:
+        """Returns softmax distribution across emotion classes, top label, and neural incongruity signals."""
+        clean_text = (text or "").strip()
+        if not clean_text:
+            return {
+                "label": "neutral",
+                "confidence": 0.85,
+                "probabilities": {"neutral": 0.85, "joy": 0.05, "sadness": 0.03, "anger": 0.03, "surprise": 0.02, "disgust": 0.01, "fear": 0.01},
+                "raw_text": ""
+            }
+
+        # Check for MuRIL MTL engine if loaded
+        if self.muril_engine is not None:
             try:
-                results = self.classifier(safe_text, truncation=True, max_length=512)[0]
-                prob_dict = {res["label"].lower(): float(res["score"]) for res in results}
-                top_item = max(prob_dict.items(), key=lambda x: x[1])
+                res = self.muril_engine.evaluate(clean_text)
+                emo = res["emotion_detection"]
+                sarc = res["sarcasm_detection"]
                 return {
-                    "label": top_item[0],
-                    "confidence": round(top_item[1], 4),
-                    "probabilities": {k: round(v, 4) for k, v in prob_dict.items()}
+                    "label": emo["predicted_emotion"],
+                    "confidence": emo["confidence"],
+                    "probabilities": emo["emotion_distribution"],
+                    "neural_incongruity": sarc["context_incongruity_distance"],
+                    "sarcasm_score": sarc["sarcasm_score"],
+                    "is_sarcastic": sarc["is_sarcastic"],
+                    "raw_text": clean_text
                 }
             except Exception as ex:
-                print(f"[Text Emotion Exec Warning] Runtime error: {ex}.")
+                pass
 
-        txt_lower = text.lower()
-        if any(w in txt_lower for w in ["badhiya", "excellent", "great", "good", "happy", "awesome", "nalla", "bagundi"]):
-            prob_dict = {"joy": 0.82, "surprise": 0.10, "neutral": 0.05, "anger": 0.01, "sadness": 0.01, "disgust": 0.005, "fear": 0.005}
-        elif any(w in txt_lower for w in ["bad", "worst", "terrible", "ganda", "bekar"]):
-            prob_dict = {"anger": 0.75, "sadness": 0.15, "neutral": 0.05, "disgust": 0.03, "joy": 0.01, "surprise": 0.005, "fear": 0.005}
+        # 1. DistilRoBERTa Transformer inference
+        prob_dict = {}
+        if self.classifier is not None:
+            try:
+                words = clean_text.split()[:200]
+                safe_text = " ".join(words)
+                results = self.classifier(safe_text, truncation=True, max_length=512)[0]
+                prob_dict = {res["label"].lower(): float(res["score"]) for res in results}
+            except Exception as ex:
+                pass
+
+        # 2. Code-Mixed Affective Lexicon matching
+        low = clean_text.lower()
+        lex_scores = {lbl: 0.0 for lbl in self.labels}
+        for emo_lbl, words in self.CODE_MIX_EMOTIONS.items():
+            for w in words:
+                if re.search(r'\b' + re.escape(w) + r'\b', low):
+                    lex_scores[emo_lbl] += 0.35
+
+        # Merge transformer probabilities with code-mix lexicon signals
+        if prob_dict:
+            combined = {}
+            for lbl in self.labels:
+                trans_score = prob_dict.get(lbl, 0.01)
+                lex_boost = lex_scores.get(lbl, 0.0)
+                combined[lbl] = trans_score + lex_boost
         else:
-            prob_dict = {"neutral": 0.70, "joy": 0.15, "sadness": 0.08, "anger": 0.04, "surprise": 0.02, "disgust": 0.005, "fear": 0.005}
+            combined = lex_scores.copy()
+            if sum(combined.values()) == 0:
+                combined["neutral"] = 0.70
+
+        # Normalize to valid probability distribution
+        total = sum(combined.values())
+        if total > 0:
+            prob_dict = {k: round(v / total, 4) for k, v in combined.items()}
+        else:
+            prob_dict = {"neutral": 0.70, "joy": 0.15, "sadness": 0.05, "anger": 0.05, "surprise": 0.03, "disgust": 0.01, "fear": 0.01}
+
+        # Check for sarcasm contrast in text (e.g. positive praise + failure)
+        # Sarcasm detection handles final sarcasm flag, but compute lexical sarcasm score here
+        sarcasm_score = 0.0
+        from pipeline.modules.module6_sarcasm import SarcasmDetector
+        has_contrast, c_score, _, _ = SarcasmDetector._detect_lexical_contrast(clean_text)
+        if has_contrast:
+            sarcasm_score = c_score
+            # If surface expression was mock-joy ("great job breaking server"), true emotion is anger/frustration or surprise
+            if prob_dict.get("joy", 0) > 0.35:
+                prob_dict["anger"] = round(max(0.70, prob_dict.get("joy", 0.7)), 4)
+                prob_dict["surprise"] = 0.15
+                prob_dict["joy"] = 0.05
 
         top_item = max(prob_dict.items(), key=lambda x: x[1])
         return {
             "label": top_item[0],
             "confidence": round(top_item[1], 4),
-            "probabilities": prob_dict
+            "probabilities": prob_dict,
+            "sarcasm_score": sarcasm_score,
+            "raw_text": clean_text
         }
 
 

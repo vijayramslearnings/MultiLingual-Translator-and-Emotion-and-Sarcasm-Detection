@@ -19,7 +19,10 @@
   const canvas = document.getElementById("audioVisualizerCanvas");
   const ctx = canvas ? canvas.getContext("2d") : null;
 
-  function initAudioContext() {
+  let mediaRecorder = null;
+  let mediaChunks = [];
+
+  async function initAudioContext() {
     if (!audioCtx) {
       const AudioContextClass = window.AudioContext || window.webkitAudioContext;
       audioCtx = new AudioContextClass();
@@ -28,9 +31,13 @@
       analyser.smoothingTimeConstant = 0.8;
     }
     if (audioCtx.state === "suspended") {
-      audioCtx.resume();
+      try {
+        await audioCtx.resume();
+      } catch (e) {
+        console.warn("[WebAudio] resume error:", e);
+      }
     }
-    recordingSampleRate = audioCtx.sampleRate;
+    recordingSampleRate = audioCtx.sampleRate || 44100;
   }
 
   // Draw Audio Visualizer Bars
@@ -78,14 +85,15 @@
   // Start live microphone capture & recording
   async function startMicrophone() {
     try {
-      initAudioContext();
+      await initAudioContext();
       recordedSamples = [];
+      mediaChunks = [];
 
       microphoneStream = await navigator.mediaDevices.getUserMedia({
         audio: {
-          channelCount: 1,
           echoCancellation: true,
-          noiseSuppression: true
+          noiseSuppression: true,
+          autoGainControl: true
         },
         video: false
       });
@@ -93,7 +101,20 @@
       const source = audioCtx.createMediaStreamSource(microphoneStream);
       source.connect(analyser);
 
-      // Create recorder processor node with zero-gain sink to prevent echo muting
+      // Start MediaRecorder if supported
+      if (window.MediaRecorder) {
+        try {
+          mediaRecorder = new MediaRecorder(microphoneStream);
+          mediaRecorder.ondataavailable = (e) => {
+            if (e.data && e.data.size > 0) mediaChunks.push(e.data);
+          };
+          mediaRecorder.start(100);
+        } catch (e) {
+          mediaRecorder = null;
+        }
+      }
+
+      // High-resolution PCM ScriptProcessor for 16kHz mono WAV generation
       scriptProcessor = audioCtx.createScriptProcessor(4096, 1, 1);
       scriptProcessor.onaudioprocess = (e) => {
         if (!isListening) return;
@@ -102,7 +123,7 @@
       };
 
       const muteGain = audioCtx.createGain();
-      muteGain.gain.value = 0.0;
+      muteGain.gain.value = 0.0001; // Non-zero keeps audio graph active in power-saving mode
 
       source.connect(scriptProcessor);
       scriptProcessor.connect(muteGain);
@@ -114,20 +135,25 @@
     } catch (err) {
       console.warn("[WebAudio] Microphone access error:", err);
       isListening = false;
-      return false;
+      throw err;
     }
   }
 
   // Stop recording and compile WAV Blob
-  function stopMicrophone() {
+  async function stopMicrophone() {
     isListening = false;
 
+    if (mediaRecorder && mediaRecorder.state !== "inactive") {
+      try { mediaRecorder.stop(); } catch(e){}
+    }
     if (scriptProcessor) {
-      scriptProcessor.disconnect();
+      try { scriptProcessor.disconnect(); } catch(e){}
       scriptProcessor = null;
     }
     if (microphoneStream) {
-      microphoneStream.getTracks().forEach((track) => track.stop());
+      microphoneStream.getTracks().forEach((track) => {
+        try { track.stop(); } catch(e){}
+      });
       microphoneStream = null;
     }
     if (animId) {

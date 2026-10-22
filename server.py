@@ -14,7 +14,8 @@ import shutil
 import tempfile
 import numpy as np
 from typing import Optional
-from fastapi import FastAPI, File, UploadFile, Form, HTTPException
+from fastapi import FastAPI, File, UploadFile, Form, HTTPException, Request
+from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -42,6 +43,7 @@ os.makedirs("data/uploads", exist_ok=True)
 class TextProcessRequest(BaseModel):
     text: str
     target_lang: str = "en"
+    source_lang: Optional[str] = "hi-en"
     tone_type: Optional[str] = "neutral"
 
 
@@ -49,7 +51,9 @@ class TextProcessRequest(BaseModel):
 async def process_audio(
     audio: UploadFile = File(...),
     target_lang: str = Form("en"),
-    override_transcript: Optional[str] = Form(None)
+    source_lang: Optional[str] = Form("hi-en"),
+    override_transcript: Optional[str] = Form(None),
+    live_transcript: Optional[str] = Form(None)
 ):
     """
     Receives real audio recording from browser microphone or file upload,
@@ -85,11 +89,15 @@ async def process_audio(
         if override_transcript and not override_transcript.strip():
             override_transcript = None
 
+        clean_live = live_transcript.strip() if (live_transcript and live_transcript.strip()) else None
+
         # Execute 7-stage ML pipeline on the user's actual audio
         result = pipeline.process(
             audio_path=wav_path,
             target_lang=target_lang,
-            override_transcript=override_transcript
+            source_lang=source_lang,
+            override_transcript=override_transcript,
+            client_live_transcript=clean_live
         )
 
         return result
@@ -107,47 +115,104 @@ async def process_audio(
                     pass
 
 
+@app.get("/api/health")
+async def health_check():
+    """Health check endpoint for frontend and diagnostic verification."""
+    return {"status": "ok", "app": "Bhasha Live", "version": "2.0.0"}
+
+
 @app.post("/api/process-text")
 async def process_text(request: TextProcessRequest):
     """
-    Processes directly typed text through the pipeline with matching audio synthesis.
+    Processes directly typed text through the pipeline with fast in-memory execution.
     """
     text = request.text.strip()
     if not text:
         raise HTTPException(status_code=400, detail="Text cannot be empty.")
 
     target_lang = request.target_lang or "en"
-    temp_audio = f"data/uploads/temp_text_{uuid.uuid4().hex[:8]}.wav"
+    source_lang = request.source_lang or "hi-en"
 
     try:
-        # Generate acoustic speech sample for this text
-        generate_synthetic_audio(temp_audio, duration_sec=3.0, tone_type=request.tone_type or "neutral")
-
-        # Run pipeline with the user's custom typed text
-        result = pipeline.process(
-            audio_path=temp_audio,
+        result = pipeline.process_text(
+            text=text,
+            source_lang=source_lang,
             target_lang=target_lang,
-            override_transcript=text
+            tone_type=request.tone_type or "neutral"
         )
-
         return result
-
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        if os.path.exists(temp_audio):
-            try:
-                os.remove(temp_audio)
-            except Exception:
-                pass
 
 
-# Mount static frontend files
-frontend_dir = os.path.abspath("frontend")
+# Static and Frontend Routes
+base_dir = os.path.dirname(os.path.abspath(__file__))
+frontend_dir = os.path.join(base_dir, "frontend")
+
+@app.get("/")
+@app.get("/app")
+@app.get("/demo")
+@app.get("/index")
+@app.get("/home")
+@app.get("/dashboard")
+async def serve_frontend():
+    index_file = os.path.join(frontend_dir, "index.html")
+    if os.path.exists(index_file):
+        return FileResponse(index_file)
+    raise HTTPException(status_code=404, detail="index.html not found")
+
+# Mount static asset directories
+if os.path.exists(os.path.join(frontend_dir, "css")):
+    app.mount("/css", StaticFiles(directory=os.path.join(frontend_dir, "css")), name="css")
+if os.path.exists(os.path.join(frontend_dir, "js")):
+    app.mount("/js", StaticFiles(directory=os.path.join(frontend_dir, "js")), name="js")
+if os.path.exists(os.path.join(frontend_dir, "assets")):
+    app.mount("/assets", StaticFiles(directory=os.path.join(frontend_dir, "assets")), name="assets")
+
+# Mount entire frontend for any remaining static resources
 if os.path.exists(frontend_dir):
     app.mount("/", StaticFiles(directory=frontend_dir, html=True), name="frontend")
 
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=3000)
+    import socket
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Bhasha Live Multilingual Voice & Text Server")
+    parser.add_argument("--port", type=int, default=int(os.environ.get("PORT", 8000)), help="Port to bind server to")
+    parser.add_argument("--host", type=str, default="0.0.0.0", help="Host address")
+    parser.add_argument("--ssl", action="store_true", default=False, help="Enable HTTPS using cert.pem/key.pem (default: disabled for clean localhost HTTP)")
+    args, _ = parser.parse_known_args()
+
+    def find_free_port(start_port: int, max_attempts: int = 20) -> int:
+        for port in range(start_port, start_port + max_attempts):
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                try:
+                    s.bind(("0.0.0.0", port))
+                    return port
+                except OSError:
+                    continue
+        return start_port
+
+    target_port = find_free_port(args.port)
+    if target_port != args.port:
+        print(f"[Notice] Port {args.port} is currently in use by another process. Auto-switching to port {target_port}.")
+
+    cert_file = os.path.join(base_dir, "cert.pem")
+    key_file = os.path.join(base_dir, "key.pem")
+    use_ssl = bool(args.ssl and os.path.exists(cert_file) and os.path.exists(key_file))
+
+    protocol = "https" if use_ssl else "http"
+    print("\n==================================================")
+    print(f"🚀 Bhasha Live Web Server Ready! ({'SSL / HTTPS Enabled' if use_ssl else 'HTTP'})")
+    print(f"👉 Open in browser: {protocol}://localhost:{target_port}")
+    print(f"👉 Alternative URL: {protocol}://127.0.0.1:{target_port}")
+    print("==================================================\n")
+
+    if use_ssl:
+        uvicorn.run(app, host=args.host, port=target_port, ssl_keyfile=key_file, ssl_certfile=cert_file)
+    else:
+        uvicorn.run(app, host=args.host, port=target_port)
+

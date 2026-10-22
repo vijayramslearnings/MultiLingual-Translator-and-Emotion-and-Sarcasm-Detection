@@ -128,7 +128,12 @@ def run_evaluation(config_path: str = "config/default_config.yaml"):
 
     start_time = time.time()
     for item in eval_dataset:
-        res = pipeline.process(item["audio_path"], target_lang="en", override_transcript=item["ref_transcript"])
+        res = pipeline.process(
+            item["audio_path"], 
+            target_lang="en", 
+            source_lang=item.get("language_pair"),
+            override_transcript=item["ref_transcript"]
+        )
 
         asr_hypotheses.append(res["transcript"])
         asr_references.append(item["ref_transcript"])

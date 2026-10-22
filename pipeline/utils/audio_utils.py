@@ -51,7 +51,14 @@ def load_audio(audio_path: str, target_sr: int = 16000) -> tuple[torch.Tensor, i
         waveform = resampler(waveform)
         sr = target_sr
 
-    return waveform.squeeze(), sr
+    if not isinstance(waveform, torch.Tensor):
+        waveform = torch.tensor(waveform, dtype=torch.float32)
+
+    waveform = waveform.squeeze()
+    if waveform.numel() == 0 or (waveform.ndim == 1 and waveform.shape[0] < 100):
+        waveform = torch.zeros(target_sr, dtype=torch.float32)
+
+    return waveform, sr
 
 
 def extract_acoustic_features(waveform: torch.Tensor, sample_rate: int = 16000) -> dict:

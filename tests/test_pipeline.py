@@ -80,3 +80,24 @@ def test_pipeline_end_to_end_json_schema(sample_audio):
         assert "token" in attr
         assert "score" in attr
         assert isinstance(attr["score"], float)
+
+
+def test_pipeline_tanglish_source_lang(sample_audio):
+    config_path = "config/default_config.yaml"
+    pipeline = MultilingualVoicePipeline(config_path=config_path)
+
+    # Tanglish input with explicit source_lang="ta-en"
+    tanglish_text = "hi nan iinaiku party ku poren so nalaiku nan varapa nee yen homework mattum pandriya please??"
+    result = pipeline.process(
+        sample_audio, 
+        target_lang="en", 
+        source_lang="ta-en",
+        override_transcript=tanglish_text
+    )
+
+    assert result["source_language"] == "ta-en"
+    assert "homework" in result["translated_text"].lower()
+    assert result["detected_dialect"] == "Tanglish (Tamil + English)"
+    # Language segments must not have Hindi 'hi'
+    for seg in result["language_segments"]:
+        assert seg["lang"] in ["ta", "en"], f"Unexpected language tag {seg['lang']} for Tanglish token {seg['text']}"

@@ -58,6 +58,22 @@ def test_module2_lid(mock_config):
     assert res["is_code_mixed"] is True
 
 
+def test_module2_lid_tanglish_selection(mock_config):
+    lid = LanguageIdentifier(mock_config)
+    # When user selects Tanglish, tokens must be tagged as Tamil (ta) or English (en), NEVER Hindi (hi)
+    tanglish_sentence = "hi nan iinaiku party ku poren so nalaiku nan varapa nee yen homework mattum pandriya please??"
+    res = lid.identify(tanglish_sentence, source_lang="ta-en")
+    assert "language_segments" in res
+    assert "ta" in res["detected_languages"]
+    assert "hi" not in res["detected_languages"], "Tanglish must not be classified as Hindi when user selected Tanglish!"
+    
+    # Check specific segment tags
+    words_map = {seg["text"].lower(): seg["lang"] for seg in res["language_segments"]}
+    assert words_map.get("nan") == "ta"
+    assert words_map.get("party") == "en"
+    assert words_map.get("homework") == "en"
+
+
 def test_module3_transliteration(mock_config):
     normalizer = TextNormalizer(mock_config)
     segments = [{"text": "Aapka", "lang": "hi"}, {"text": "kaam", "lang": "hi"}]
@@ -71,6 +87,32 @@ def test_module4_mt(mock_config):
     res = translator.translate("Aapka kaam is really bahut badhiya hai", target_lang="en")
     assert isinstance(res, str)
     assert "work" in res.lower() or "excellent" in res.lower() or "badhiya" in res.lower()
+
+
+def test_module4_mt_detailed_and_pronunciation(mock_config):
+    translator = MachineTranslator(mock_config)
+    
+    # 1. Test Tanglish to Hindi with pronunciation guide
+    tanglish_sample = "hi nan iinaiku party ku poren so nalaiku nan varapa nee yen homework mattum pandriya please??"
+    detailed_hi = translator.translate_detailed(tanglish_sample, target_lang="hi")
+    assert "translated_text" in detailed_hi
+    assert "pronunciation_guide" in detailed_hi
+    assert "detected_language" in detailed_hi
+    assert detailed_hi["detected_language"] == "Tanglish (Tamil + English)"
+    assert len(detailed_hi["translated_text"]) > 0
+    assert len(detailed_hi["pronunciation_guide"]) > 0
+    # Pronunciation guide should be in Latin script
+    assert any(c.isalpha() and ord(c) < 128 for c in detailed_hi["pronunciation_guide"])
+
+    # 2. Test Tanglish to English
+    detailed_en = translator.translate_detailed(tanglish_sample, target_lang="en")
+    assert "homework" in detailed_en["translated_text"].lower()
+    assert detailed_en["pronunciation_guide"] == detailed_en["translated_text"]
+
+    # 3. Test Direct Pronunciation Generation on native Devanagari
+    guide = translator.generate_pronunciation_guide("हाय, मैं आज एक पार्टी में जा रहा हूँ", target_lang="hi")
+    assert isinstance(guide, str)
+    assert "party" in guide.lower() or "paartee" in guide.lower() or "paarty" in guide.lower()
 
 
 def test_module5_emotion(mock_config, synthetic_audio_path):

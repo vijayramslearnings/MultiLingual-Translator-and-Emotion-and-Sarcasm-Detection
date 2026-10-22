@@ -9,36 +9,28 @@ pipeline:
 
 asr:
   backend: "whisper"  # "whisper", "indic_whisper", "mock"
-  model_name: "openai/whisper-tiny"  # lightweight default for fast inference, editable to "openai/whisper-large-v3"
+  model_name: "openai/whisper-small"  # 244M parameter model with accurate Indian language transcription
   language: null  # Auto-detect language if null
   sample_rate: 16000
 
 lid:
   backend: "fasttext_xlmr"  # "fasttext_xlmr", "indic_lid", "heuristic"
   model_name: "papluca/xlm-roberta-base-language-detection"
-  supported_languages: ["hi", "ta", "te", "kn", "ml", "bn", "mr", "gu", "pa", "ur", "en"]
-  code_mix_pairs: ["hi-en", "ta-en", "te-en", "bn-en"]
+  supported_languages: ["ta", "hi", "en"]
+  code_mix_pairs: ["ta-en", "hi-en"]
 
 transliteration:
   backend: "indic_transliteration" # "indic_transliteration", "indic_xlit"
   source_script: "Iast"  # or Romanized/ITRANS
-  target_script: "Devanagari"
+  target_script: "Tamil"
 
 mt:
-  backend: "nllb"  # "indic_trans2", "nllb", "marian"
+  backend: "nllb"  # "nllb", "indic_trans2", "marian"
   model_name: "facebook/nllb-200-distilled-600M"
   default_target_lang: "en"
   language_code_map:
-    hi: "hin_Deva"
     ta: "tam_Taml"
-    te: "tel_Telu"
-    kn: "kan_Knda"
-    ml: "mal_Mlym"
-    bn: "ben_Beng"
-    mr: "mar_Deva"
-    gu: "guj_Gujr"
-    pa: "pan_Guru"
-    ur: "urd_Arab"
+    hi: "hin_Deva"
     en: "eng_Latn"
 
 emotion_text:
@@ -65,3 +57,16 @@ xai:
   captum_method: "integrated_gradients"  # "integrated_gradients", "shap"
   top_k_tokens: 5
   acoustic_window_sec: 0.2
+
+# Advanced Indian Code-Mixed MTL & IndicTrans2 Subsystem
+codemix_mtl:
+  enabled: true
+  muril_model: "google/muril-base-cased"
+  indictrans_model: "ai4bharat/indictrans2-indic-en-1B"
+  indicxlit_backend: "indic_xlit"
+  contrastive_margin: 1.0
+  weights:
+    lambda_emotion: 1.0
+    lambda_sarcasm: 1.5
+    lambda_contrastive: 0.8
+

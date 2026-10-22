@@ -1,0 +1,32 @@
+[
+  {
+    "epoch": 1,
+    "train_loss": 2.329754859634808,
+    "val_loss": 2.389876812696457,
+    "gen_gap": 0.0601219530616488,
+    "status": "HEALTHY",
+    "val_emotion_acc": 0.9104166666666667,
+    "val_sarcasm_acc": 0.9895833333333334,
+    "separation_delta": 0.0016259104013442993
+  },
+  {
+    "epoch": 2,
+    "train_loss": 2.159122796995299,
+    "val_loss": 2.2008661131064096,
+    "gen_gap": 0.041743316111110484,
+    "status": "HEALTHY",
+    "val_emotion_acc": 0.9104166666666667,
+    "val_sarcasm_acc": 0.9895833333333334,
+    "separation_delta": 0.018974825739860535
+  },
+  {
+    "epoch": 3,
+    "train_loss": 1.9909171253442763,
+    "val_loss": 2.1985155244668326,
+    "gen_gap": 0.2075983991225563,
+    "status": "HEALTHY",
+    "val_emotion_acc": 0.9104166666666667,
+    "val_sarcasm_acc": 0.9895833333333334,
+    "separation_delta": 0.03341301530599594
+  }
+]
